@@ -42,7 +42,8 @@ export default function Home() {
     ultimaConsulta: '',
     frequenciaConsultas: '',
     riscoCancelamento: '',
-    statusPlano: ''
+    statusPlano: '',
+    endereco: { rua: '', cidade: '', estado: '' }
   });
   const [updateId, setUpdateId] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
@@ -56,17 +57,58 @@ export default function Home() {
     setAnchorEl(null);
   };
 
-  // Funções para navegação
+  // Funções para navegação e atualização da lista
+  const fetchPacientes = async () => {
+    try {
+      const response = await axios.get('http://localhost:3001/pacientes');
+      setPacientes(response.data);
+    } catch (error) {
+      console.error('Erro ao buscar pacientes:', error.response ? error.response.data : error.message);
+    }
+  };
+
+  // Função para buscar um paciente específico pelo ID
+  const fetchPacienteById = async (id) => {
+    try {
+      const response = await axios.get(`http://localhost:3001/pacientes/${id}`);
+      const paciente = response.data;
+      if (paciente) {
+        setFormData({
+          pacienteId: paciente.pacienteId || '',
+          nome: paciente.nome || '',
+          cpf: paciente.cpf || '',
+          dataNascimento: paciente.dataNascimento || '',
+          email: paciente.email || '',
+          telefone: paciente.telefone || '',
+          rua: paciente.endereco?.rua || '',
+          cidade: paciente.endereco?.cidade || '',
+          estado: paciente.endereco?.estado || '',
+          ultimaConsulta: paciente.ultimaConsulta || '',
+          frequenciaConsultas: paciente.frequenciaConsultas || '',
+          riscoCancelamento: paciente.riscoCancelamento || '',
+          statusPlano: paciente.statusPlano || '',
+          endereco: {
+            rua: paciente.endereco?.rua || '',
+            cidade: paciente.endereco?.cidade || '',
+            estado: paciente.endereco?.estado || ''
+          }
+        });
+      } else {
+        alert('Paciente não encontrado');
+        resetForm();
+      }
+    } catch (error) {
+      console.error('Erro ao buscar paciente:', error.response ? error.response.data : error.message);
+      alert('Erro ao buscar paciente: ' + (error.response?.data?.error || error.message));
+      resetForm();
+    }
+  };
+
   const handlePageChange = async (newPage) => {
     setPage(newPage);
     handleMenuClose();
     if (newPage === 'read' || newPage === 'delete' || newPage === 'export') {
-      try {
-        const response = await axios.get('http://localhost:3001/pacientes');
-        setPacientes(response.data);
-      } catch (error) {
-        console.error('Erro ao buscar pacientes:', error);
-      }
+      await fetchPacientes();
     }
   };
 
@@ -75,109 +117,134 @@ export default function Home() {
     const { name, value } = e.target;
     if (name.includes('endereco.')) {
       const field = name.split('.')[1];
-      setFormData({ ...formData, endereco: { ...formData.endereco, [field]: value } });
+      setFormData({
+        ...formData,
+        endereco: { ...formData.endereco, [field]: value }
+      });
     } else {
       setFormData({ ...formData, [name]: value });
     }
   };
 
+  const resetForm = () => {
+    setFormData({
+      pacienteId: '',
+      nome: '',
+      cpf: '',
+      dataNascimento: '',
+      email: '',
+      telefone: '',
+      rua: '',
+      cidade: '',
+      estado: '',
+      ultimaConsulta: '',
+      frequenciaConsultas: '',
+      riscoCancelamento: '',
+      statusPlano: '',
+      endereco: { rua: '', cidade: '', estado: '' }
+    });
+    setUpdateId('');
+  };
+
   const handleCreate = async () => {
     try {
       const payload = {
-        pacienteId: parseInt(formData.pacienteId),
-        nome: formData.nome,
-        cpf: formData.cpf,
-        dataNascimento: formData.dataNascimento,
-        email: formData.email,
-        telefone: formData.telefone,
+        pacienteId: Number(formData.pacienteId) || null,
+        nome: formData.nome?.trim() || '',
+        cpf: formData.cpf?.trim() || '',
+        dataNascimento: formData.dataNascimento || '',
+        email: formData.email?.trim() || '',
+        telefone: formData.telefone?.trim() || '',
         endereco: {
-          rua: formData.rua,
-          cidade: formData.cidade,
-          estado: formData.estado
+          rua: formData.rua?.trim() || '',
+          cidade: formData.cidade?.trim() || '',
+          estado: formData.estado?.trim() || ''
         },
-        ultimaConsulta: formData.ultimaConsulta,
-        frequenciaConsultas: parseInt(formData.frequenciaConsultas),
-        riscoCancelamento: parseFloat(formData.riscoCancelamento),
-        statusPlano: formData.statusPlano
+        ultimaConsulta: formData.ultimaConsulta || '',
+        frequenciaConsultas: Number(formData.frequenciaConsultas) || 0,
+        riscoCancelamento: Number(formData.riscoCancelamento) || 0,
+        statusPlano: formData.statusPlano || ''
       };
-      await axios.post('http://localhost:3001/pacientes', payload);
+
+      if (!payload.pacienteId || !payload.nome || !payload.cpf) {
+        alert('Preencha os campos obrigatórios: ID, Nome, CPF');
+        return;
+      }
+
+      console.log('Payload enviado (CREATE):', payload);
+      const response = await axios.post('http://localhost:3001/pacientes', payload);
+      console.log('Paciente criado:', response.data);
       alert('Paciente cadastrado com sucesso!');
-      setFormData({
-        pacienteId: '',
-        nome: '',
-        cpf: '',
-        dataNascimento: '',
-        email: '',
-        telefone: '',
-        rua: '',
-        cidade: '',
-        estado: '',
-        ultimaConsulta: '',
-        frequenciaConsultas: '',
-        riscoCancelamento: '',
-        statusPlano: ''
-      });
+      resetForm();
+      await fetchPacientes();
     } catch (error) {
-      console.error('Erro ao criar paciente:', error);
-      alert('Erro ao cadastrar paciente.');
+      const errorMessage = error.response
+        ? `Erro ${error.response.status}: ${error.response.data.error || error.response.data.message}`
+        : error.message;
+      console.error('Erro ao criar paciente:', errorMessage);
+      alert(`Erro ao cadastrar paciente: ${errorMessage}`);
     }
   };
 
   const handleUpdate = async () => {
     try {
-      const payload = {
-        pacienteId: parseInt(updateId),
-        nome: formData.nome,
-        cpf: formData.cpf,
-        dataNascimento: formData.dataNascimento,
-        email: formData.email,
-        telefone: formData.telefone,
-        endereco: {
-          rua: formData.rua,
-          cidade: formData.cidade,
-          estado: formData.estado
-        },
-        ultimaConsulta: formData.ultimaConsulta,
-        frequenciaConsultas: parseInt(formData.frequenciaConsultas),
-        riscoCancelamento: parseFloat(formData.riscoCancelamento),
-        statusPlano: formData.statusPlano
-      };
-      await axios.put(`http://localhost:3001/pacientes/${updateId}`, payload);
+      // Construir payload apenas com campos preenchidos
+      const payload = {};
+      if (formData.pacienteId) payload.pacienteId = Number(formData.pacienteId);
+      if (formData.nome?.trim()) payload.nome = formData.nome.trim();
+      if (formData.cpf?.trim()) payload.cpf = formData.cpf.trim();
+      if (formData.dataNascimento) payload.dataNascimento = formData.dataNascimento;
+      if (formData.email?.trim()) payload.email = formData.email.trim();
+      if (formData.telefone?.trim()) payload.telefone = formData.telefone.trim();
+      if (formData.rua?.trim() || formData.cidade?.trim() || formData.estado?.trim()) {
+        payload.endereco = {};
+        if (formData.rua?.trim()) payload.endereco.rua = formData.rua.trim();
+        if (formData.cidade?.trim()) payload.endereco.cidade = formData.cidade.trim();
+        if (formData.estado?.trim()) payload.endereco.estado = formData.estado.trim();
+      }
+      if (formData.ultimaConsulta) payload.ultimaConsulta = formData.ultimaConsulta;
+      if (formData.frequenciaConsultas) payload.frequenciaConsultas = Number(formData.frequenciaConsultas);
+      if (formData.riscoCancelamento) payload.riscoCancelamento = Number(formData.riscoCancelamento);
+      if (formData.statusPlano) payload.statusPlano = formData.statusPlano;
+
+      // Validação
+      if (!payload.pacienteId || !payload.nome || !payload.cpf) {
+        alert('Preencha os campos obrigatórios: ID, Nome, CPF');
+        return;
+      }
+
+      console.log('Payload enviado (UPDATE):', payload);
+      const response = await axios.put(`http://localhost:3001/pacientes/${updateId}`, payload);
+      console.log('Paciente atualizado:', response.data);
       alert('Paciente atualizado com sucesso!');
-      setFormData({
-        pacienteId: '',
-        nome: '',
-        cpf: '',
-        dataNascimento: '',
-        email: '',
-        telefone: '',
-        rua: '',
-        cidade: '',
-        estado: '',
-        ultimaConsulta: '',
-        frequenciaConsultas: '',
-        riscoCancelamento: '',
-        statusPlano: ''
-      });
-      setUpdateId('');
+      resetForm();
+      await fetchPacientes();
     } catch (error) {
-      console.error('Erro ao atualizar paciente:', error);
-      alert('Erro ao atualizar paciente.');
+      const errorMessage = error.response
+        ? `Erro ${error.response.status}: ${error.response.data.error || error.response.data.message}`
+        : error.message;
+      console.error('Erro ao atualizar paciente:', errorMessage);
+      alert(`Erro ao atualizar paciente: ${errorMessage}`);
     }
   };
 
   const handleDelete = async () => {
     try {
       for (const id of selectedRows) {
+        console.log('Deletando paciente ID:', id);
         await axios.delete(`http://localhost:3001/pacientes/${id}`);
       }
+      console.log('Pacientes deletados:', selectedRows);
       alert('Paciente(s) deletado(s) com sucesso!');
       setSelectedRows([]);
-      handlePageChange('delete');
       setDeleteDialogOpen(false);
+      await fetchPacientes();
     } catch (error) {
-      console.error('Erro ao deletar paciente:', error);
-      alert('Erro ao deletar paciente.');
+      const errorMessage = error.response
+        ? `Erro ${error.response.status}: ${error.response.data.error || error.response.data.message}`
+        : error.message;
+      console.error('Erro ao deletar paciente:', errorMessage);
+      alert(`Erro ao deletar paciente: ${errorMessage}`);
     }
   };
 
@@ -195,7 +262,6 @@ export default function Home() {
     window.URL.revokeObjectURL(url);
   };
 
-  // Função para lidar com seleção de checkboxes
   const handleRowSelection = (pacienteId) => {
     setSelectedRows((prev) =>
       prev.includes(pacienteId)
@@ -206,7 +272,6 @@ export default function Home() {
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#F5F6F5' }}>
-      {/* Menu Superior */}
       <AppBar position="static" sx={{ bgcolor: '#003087' }}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1, color: '#FFFFFF' }}>
@@ -267,7 +332,6 @@ export default function Home() {
         </Toolbar>
       </AppBar>
 
-      {/* Conteúdo da Página */}
       <Box sx={{ p: 4 }}>
         {page === 'home' && (
           <Typography variant="h4" sx={{ color: '#003087' }}>
@@ -287,6 +351,7 @@ export default function Home() {
                   name="pacienteId"
                   value={formData.pacienteId}
                   onChange={handleFormChange}
+                  type="number"
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -377,6 +442,7 @@ export default function Home() {
                   name="frequenciaConsultas"
                   value={formData.frequenciaConsultas}
                   onChange={handleFormChange}
+                  type="number"
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -386,6 +452,7 @@ export default function Home() {
                   name="riscoCancelamento"
                   value={formData.riscoCancelamento}
                   onChange={handleFormChange}
+                  type="number"
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -455,7 +522,15 @@ export default function Home() {
                   fullWidth
                   label="ID (obrigatório)"
                   value={updateId}
-                  onChange={(e) => setUpdateId(e.target.value)}
+                  onChange={(e) => {
+                    setUpdateId(e.target.value);
+                    if (e.target.value) {
+                      fetchPacienteById(Number(e.target.value));
+                    } else {
+                      resetForm();
+                    }
+                  }}
+                  type="number"
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -546,6 +621,7 @@ export default function Home() {
                   name="frequenciaConsultas"
                   value={formData.frequenciaConsultas}
                   onChange={handleFormChange}
+                  type="number"
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -555,6 +631,7 @@ export default function Home() {
                   name="riscoCancelamento"
                   value={formData.riscoCancelamento}
                   onChange={handleFormChange}
+                  type="number"
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
